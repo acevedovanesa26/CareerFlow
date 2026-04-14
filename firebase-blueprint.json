@@ -1,0 +1,73 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile information",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "Firebase Auth UID" },
+        "email": { "type": "string", "format": "email" },
+        "displayName": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email"]
+    },
+    "CV": {
+      "title": "CV",
+      "description": "Curriculum Vitae data",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "name": { "type": "string", "description": "Name of the CV version" },
+        "data": { "type": "object", "description": "Full CV JSON data" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "data", "createdAt"]
+    },
+    "Document": {
+      "title": "Document",
+      "description": "Generated professional documents",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "type": { "type": "string" },
+        "title": { "type": "string" },
+        "content": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "type", "content", "createdAt"]
+    },
+    "Interview": {
+      "title": "Interview",
+      "description": "Interview simulation session",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "config": { "type": "object" },
+        "messages": { "type": "array" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "config", "messages", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profiles"
+    },
+    "/cvs/{cvId}": {
+      "schema": "CV",
+      "description": "User CVs"
+    },
+    "/documents/{docId}": {
+      "schema": "Document",
+      "description": "Generated documents"
+    },
+    "/interviews/{interviewId}": {
+      "schema": "Interview",
+      "description": "Interview history"
+    }
+  }
+}

@@ -1,0 +1,111 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: users
+    // Document ID: {userId} (matches Auth UID)
+    // Fields: uid, email, displayName, photoURL, createdAt
+    //
+    // Collection: cvs
+    // Document ID: auto-generated
+    // Fields: userId, name, data, createdAt, updatedAt
+    //
+    // Collection: documents
+    // Document ID: auto-generated
+    // Fields: userId, type, title, content, createdAt
+    //
+    // Collection: interviews
+    // Document ID: auto-generated
+    // Fields: userId, config, messages, createdAt
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isDocOwner() {
+      return isAuthenticated() && request.auth.uid == resource.data.userId;
+    }
+
+    function isUserDocOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isValidUser(data) {
+      return data.keys().hasAll(['uid', 'email']) &&
+             data.uid is string && data.uid == request.auth.uid &&
+             data.email is string && data.email.size() < 256;
+    }
+
+    function isValidCV(data) {
+      return data.keys().hasAll(['userId', 'data', 'createdAt']) &&
+             data.userId == request.auth.uid &&
+             data.data is map &&
+             data.createdAt is timestamp;
+    }
+
+    function isValidDocument(data) {
+      return data.keys().hasAll(['userId', 'type', 'content', 'createdAt']) &&
+             data.userId == request.auth.uid &&
+             data.type is string &&
+             data.content is string && data.content.size() < 100000 &&
+             data.createdAt is timestamp;
+    }
+
+    function isValidInterview(data) {
+      return data.keys().hasAll(['userId', 'config', 'messages', 'createdAt']) &&
+             data.userId == request.auth.uid &&
+             data.config is map &&
+             data.messages is list && data.messages.size() < 500 &&
+             data.createdAt is timestamp;
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /users/{userId} {
+      allow read: if isUserDocOwner(userId);
+      allow create: if isUserDocOwner(userId) && isValidUser(request.resource.data);
+      allow update: if isUserDocOwner(userId) && isValidUser(request.resource.data);
+    }
+
+    match /cvs/{cvId} {
+      allow read: if isDocOwner();
+      allow create: if isAuthenticated() && isValidCV(request.resource.data);
+      allow update: if isDocOwner() && isValidCV(request.resource.data);
+      allow delete: if isDocOwner();
+    }
+
+    match /documents/{docId} {
+      allow read: if isDocOwner();
+      allow create: if isAuthenticated() && isValidDocument(request.resource.data);
+      allow update: if isDocOwner() && isValidDocument(request.resource.data);
+      allow delete: if isDocOwner();
+    }
+
+    match /interviews/{interviewId} {
+      allow read: if isDocOwner();
+      allow create: if isAuthenticated() && isValidInterview(request.resource.data);
+      allow update: if isDocOwner() && isValidInterview(request.resource.data);
+      allow delete: if isDocOwner();
+    }
+
+    match /test/connection {
+      allow read: if true;
+    }
+  }
+}

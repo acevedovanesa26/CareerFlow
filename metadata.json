@@ -1,0 +1,8 @@
+{
+  "name": "CareerFlow AI",
+  "description": "Plataforma integral de desarrollo profesional con IA: generador de documentos, simulador de entrevistas y constructor de CV.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}
