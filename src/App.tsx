@@ -31,9 +31,13 @@ const Login = () => {
       }, { merge: true });
       
       toast.success("¡Bienvenido a CareerFlow AI!");
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
-      toast.error("Error al iniciar sesión con Google.");
+      if (error.code === 'auth/unauthorized-domain') {
+        toast.error("Dominio no autorizado. Debes añadir tu URL de Vercel en la consola de Firebase (Authentication > Settings > Authorized Domains).");
+      } else {
+        toast.error("Error al iniciar sesión con Google.");
+      }
     }
   };
 
