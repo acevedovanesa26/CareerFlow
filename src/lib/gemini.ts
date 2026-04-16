@@ -1,7 +1,17 @@
 import { GoogleGenAI } from "@google/genai";
 
+const getApiKey = () => {
+  try {
+    // Vite replaces process.env.GEMINI_API_KEY at build time
+    return process.env.GEMINI_API_KEY || "AIzaSyB6Yfp8Vea-Fz_U274JYRMI2Yay4ZvI7Tc";
+  } catch {
+    // Fallback if process is not defined
+    return "AIzaSyB6Yfp8Vea-Fz_U274JYRMI2Yay4ZvI7Tc";
+  }
+};
+
 const ai = new GoogleGenAI({ 
-  apiKey: process.env.GEMINI_API_KEY || "AIzaSyC7gl0KKm-dpsyWLGRgrJ-u83UfKj_qspo" 
+  apiKey: getApiKey() 
 });
 
 export const geminiModel = "gemini-3-flash-preview";
