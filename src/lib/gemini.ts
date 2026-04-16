@@ -1,10 +1,10 @@
 import { GoogleGenAI } from "@google/genai";
 
 const ai = new GoogleGenAI({ 
-  apiKey: import.meta.env.VITE_GEMINI_API_KEY || "" 
+  apiKey: process.env.GEMINI_API_KEY || "AIzaSyC7gl0KKm-dpsyWLGRgrJ-u83UfKj_qspo" 
 });
 
-export const geminiModel = "gemini-1.5-flash";
+export const geminiModel = "gemini-3-flash-preview";
 
 export async function generateCareerContent(prompt: string, systemInstruction: string) {
   try {
