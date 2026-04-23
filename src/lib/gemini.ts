@@ -1,29 +1,31 @@
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI, ThinkingLevel } from "@google/genai";
 
 const getApiKey = () => {
-  try {
-    // Vite replaces process.env.GEMINI_API_KEY at build time
-    return process.env.GEMINI_API_KEY || "AIzaSyB6Yfp8Vea-Fz_U274JYRMI2Yay4ZvI7Tc";
-  } catch {
-    // Fallback if process is not defined
-    return "AIzaSyB6Yfp8Vea-Fz_U274JYRMI2Yay4ZvI7Tc";
-  }
+  // Vite replaces process.env.GEMINI_API_KEY at build time
+  return process.env.GEMINI_API_KEY || "";
 };
 
 const ai = new GoogleGenAI({ 
   apiKey: getApiKey() 
 });
 
-export const geminiModel = "gemini-3-flash-preview";
+// Using the lite model to minimize latency and cost as requested
+export const geminiModel = "gemini-3.1-flash-lite-preview";
 
 export async function generateCareerContent(prompt: string, systemInstruction: string) {
   try {
+    if (!getApiKey()) {
+      throw new Error("API Key de Gemini no configurada. Por favor, añádela en las variables de entorno.");
+    }
+
     const response = await ai.models.generateContent({
       model: geminiModel,
       contents: prompt,
       config: {
         systemInstruction,
         temperature: 0.7,
+        // Minimize latency and cost for Gemini 3 series
+        thinkingConfig: { thinkingLevel: ThinkingLevel.LOW }
       },
     });
     return response.text;
