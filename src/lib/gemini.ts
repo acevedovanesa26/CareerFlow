@@ -1,42 +1,83 @@
-import { GoogleGenAI, ThinkingLevel } from "@google/genai";
+import { GoogleGenAI } from "@google/genai";
 
-const getApiKey = () => {
-  // Vite replaces process.env.GEMINI_API_KEY at build time
-  return process.env.GEMINI_API_KEY || "";
-};
+let genAI: GoogleGenAI | null = null;
 
-const ai = new GoogleGenAI({ 
-  apiKey: getApiKey() 
-});
-
-// Using the lite model to minimize latency and cost as requested
-export const geminiModel = "gemini-3.1-flash-lite-preview";
-
-export async function generateCareerContent(prompt: string, systemInstruction: string) {
-  try {
-    if (!getApiKey()) {
-      throw new Error("API Key de Gemini no configurada. Por favor, añádela en las variables de entorno.");
+function getAI() {
+  if (!genAI) {
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      console.error("[Gemini] API Key missing in environment");
+      throw new Error("No se ha configurado la API Key de Gemini. Por favor, asegúrate de que el entorno esté configurado correctamente.");
     }
-
-    const response = await ai.models.generateContent({
-      model: geminiModel,
-      contents: prompt,
-      config: {
-        systemInstruction,
-        temperature: 0.7,
-        // Minimize latency and cost for Gemini 3 series
-        thinkingConfig: { thinkingLevel: ThinkingLevel.LOW }
-      },
-    });
-    return response.text;
-  } catch (error) {
-    console.error("Error generating content with Gemini:", error);
-    throw error;
+    genAI = new GoogleGenAI({ apiKey });
   }
+  return genAI;
 }
 
-export const SYSTEM_PROMPTS = {
-  CV_IMPROVER: "Eres un experto en reclutamiento y selección de personal. Tu tarea es mejorar el contenido de una hoja de vida (CV) para que sea más profesional, impactante y optimizado para sistemas ATS. Usa un lenguaje formal y enfocado en logros y métricas.",
-  INTERVIEW_SIMULATOR: "Eres un entrevistador senior empático y profesional de una empresa líder. Tu objetivo es llevar a cabo una entrevista de trabajo que se sienta natural, amena y conversacional, no como un interrogatorio frío. Saluda cordialmente, mantén un tono alentador y haz preguntas una a la vez. Después de cada respuesta del candidato, proporciona un feedback breve y constructivo que reconozca sus puntos fuertes antes de pasar a la siguiente pregunta. Estructura tu respuesta siempre con las etiquetas [FEEDBACK], [SCORE] (del 1 al 10 para la respuesta anterior) y [NEXT_QUESTION].",
-  DOCUMENT_GENERATOR: "Eres un redactor profesional de documentos corporativos y legales. Tu tarea es generar documentos claros, formales y bien estructurados según las necesidades del usuario.",
-};
+async function sleep(ms: number) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+export async function callingGeminiWithRetry(
+  prompt: string, 
+  systemInstruction?: string, 
+  isJson: boolean = false
+) {
+  let ai;
+  try {
+    ai = getAI();
+  } catch (e: any) {
+    throw e;
+  }
+  
+  const MODEL_NAME = "gemini-3-flash-preview";
+  let lastError: any;
+  const backoff = [1000, 2000, 4000];
+
+  for (let i = 0; i <= backoff.length; i++) {
+    try {
+      console.log(`[Gemini] Llamando a ${MODEL_NAME} (Intento ${i + 1})...`);
+      const response = await ai.models.generateContent({
+        model: MODEL_NAME,
+        contents: prompt,
+        config: {
+          systemInstruction: systemInstruction,
+          temperature: isJson ? 0.2 : 0.7, // Lower temperature for JSON for more stability
+          responseMimeType: isJson ? "application/json" : "text/plain",
+        }
+      });
+
+      const text = response.text;
+
+      if (!text) {
+        throw new Error("Respuesta de IA vacía.");
+      }
+
+      if (isJson) {
+        try {
+          const cleanedText = text.replace(/```json\n?|\n?```/g, "").trim();
+          return JSON.parse(cleanedText);
+        } catch (e) {
+          console.error("[Gemini] Error parseando JSON:", text);
+          throw new Error("La IA no devolvió un JSON válido.");
+        }
+      }
+
+      return text;
+    } catch (error: any) {
+      console.error(`[Gemini] Error en intento ${i + 1}:`, error.message || error);
+      lastError = error;
+      
+      // Don't retry if it's a fatal error or permission issue that won't change
+      if (error.message?.includes("403") || error.message?.includes("400")) {
+        break;
+      }
+
+      if (i < backoff.length) {
+        await sleep(backoff[i]);
+      }
+    }
+  }
+
+  throw lastError;
+}

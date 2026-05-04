@@ -1,207 +1,186 @@
-import * as React from "react";
-import { Link } from "react-router-dom";
-import { Button } from "@/components/ui/button";
+import React, { useState } from 'react';
+import { motion } from 'motion/react';
 import { 
-  Briefcase, 
-  Sparkles, 
-  CheckCircle2, 
   ArrowRight, 
-  FileText, 
-  Mic2, 
-  FilePlus,
-  BarChart3
-} from "lucide-react";
-import { motion } from "motion/react";
-import { Footer } from "@/components/Footer";
-import { cn } from "@/lib/utils";
+  Zap, 
+  Star, 
+  Globe, 
+  Github, 
+  PlayCircle,
+  Target,
+  MessageSquare,
+  Download,
+  TrendingUp,
+  Search,
+  CheckCircle2,
+  Cpu,
+  FileText
+} from 'lucide-react';
+import { Link } from 'react-router-dom';
+import toast from 'react-hot-toast';
+import PublicNavbar from '../components/PublicNavbar';
+import { Footer } from '../components/Footer';
+import { db, collection, addDoc, serverTimestamp } from '../lib/firebase';
 
-export default function Home() {
+const Home: React.FC = () => {
+  const container = {
+    hidden: { opacity: 0 },
+    show: {
+      opacity: 1,
+      transition: { staggerChildren: 0.1 }
+    }
+  };
+
+  const item = {
+    hidden: { opacity: 0, y: 20 },
+    show: { opacity: 1, y: 0 }
+  };
+
   return (
-    <div className="min-h-screen bg-white selection:bg-brand-medium/30">
-      {/* Animated Background Mesh */}
-      <div className="fixed inset-0 -z-20 overflow-hidden">
-        <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-brand-light/20 rounded-full blur-[120px] animate-pulse" />
-        <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-brand-medium/10 rounded-full blur-[150px] animate-pulse [animation-delay:2s]" />
-      </div>
-      {/* Navigation */}
-      <nav className="border-b bg-white/80 backdrop-blur-md sticky top-0 z-50">
-        <div className="container mx-auto px-6 h-20 flex items-center justify-between max-w-7xl">
-          <div className="flex items-center gap-2">
-            <div className="p-1 bg-brand-medium rounded-lg">
-              <Briefcase className="w-6 h-6 text-white" />
-            </div>
-            <span className="font-bold text-xl tracking-tight text-brand-dark">CareerFlow AI</span>
-          </div>
-          <div className="hidden md:flex items-center gap-8 text-sm font-medium text-zinc-600">
-            <a href="#features" className="hover:text-brand-medium transition-colors">Funcionalidades</a>
-            <a href="#how-it-works" className="hover:text-brand-medium transition-colors">Cómo funciona</a>
-            <Link to="/login">
-              <Button variant="ghost">Iniciar Sesión</Button>
-            </Link>
-            <Link to="/login">
-              <Button className="bg-brand-medium hover:bg-brand-dark">Empezar Gratis</Button>
-            </Link>
-          </div>
-        </div>
-      </nav>
+    <div className="bg-white min-h-screen overflow-x-hidden text-brand-dark">
+      <PublicNavbar />
 
       {/* Hero Section */}
-      <section className="relative pt-20 pb-32 overflow-hidden">
-        <div className="container mx-auto px-6 max-w-7xl relative z-10">
-          <div className="text-center space-y-8 max-w-4xl mx-auto">
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-brand-medium/10 text-brand-medium font-bold text-sm"
-            >
-              <Sparkles className="h-4 w-4" />
-              Impulsado por Gemini AI
-            </motion.div>
-            <motion.h1 
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.1 }}
-              className="text-5xl md:text-7xl font-bold tracking-tight text-brand-dark leading-[1.1]"
-            >
-              Lleva tu carrera profesional al <span className="text-brand-medium">siguiente nivel</span>
-            </motion.h1>
-            <motion.p 
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.2 }}
-              className="text-xl text-zinc-500 max-w-2xl mx-auto leading-relaxed"
-            >
-              La plataforma todo-en-uno para construir CVs impactantes, practicar entrevistas con IA y generar documentos corporativos en segundos.
-            </motion.p>
-            <motion.div 
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.3 }}
-              className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4"
-            >
-              <Link to="/login">
-                <Button size="lg" className="bg-brand-medium hover:bg-brand-dark h-14 px-10 text-lg rounded-xl shadow-2xl shadow-brand-medium/40 transition-all hover:scale-105 active:scale-95">
-                  Empezar ahora <ArrowRight className="ml-2 h-5 w-5" />
-                </Button>
-              </Link>
-            </motion.div>
+      <section className="max-w-7xl mx-auto px-6 pt-20 pb-32 grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
+        <motion.div 
+          initial={{ opacity: 0, x: -50 }} 
+          animate={{ opacity: 1, x: 0 }} 
+          transition={{ duration: 0.8 }}
+          className="relative z-30"
+        >
+          <div className="inline-flex items-center gap-2 px-4 py-2 bg-brand-bright/10 text-brand-bright rounded-full text-xs font-black uppercase tracking-widest mb-8">
+            <Zap size={14} /> Potenciado por IA de última generación
           </div>
-        </div>
-        
-        {/* Background elements */}
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-full -z-10 opacity-30">
-          <div className="absolute top-40 left-10 w-72 h-72 bg-brand-light rounded-full blur-[120px]" />
-          <div className="absolute bottom-10 right-10 w-96 h-96 bg-brand-medium rounded-full blur-[150px]" />
-        </div>
+          <h1 className="text-6xl lg:text-8xl font-black leading-[1] tracking-tighter mb-8">
+            Tu Carrera, <br />
+            <span className="text-brand-bright">Impulsada</span> <br />
+            por Datos.
+          </h1>
+          <p className="text-xl text-zinc-500 mb-10 max-w-lg leading-relaxed">
+            La plataforma definitiva para profesionales que buscan destacar. Analiza tu CV, simula entrevistas y acelera tu éxito laboral con herramientas de IA inteligente.
+          </p>
+          <div className="flex flex-col sm:flex-row gap-4 relative z-20">
+            <Link to="/login" id="hero-start-btn" className="btn-primary !px-10 !py-5 text-xl flex items-center justify-center gap-3 shadow-xl shadow-brand-bright/20 border-none">
+               Empezar Ahora <ArrowRight size={22} />
+            </Link>
+            <Link to="/about" id="hero-about-btn" className="btn-secondary !bg-white !text-brand-dark border-2 border-zinc-100 !px-10 !py-5 text-xl flex items-center justify-center gap-3 hover:!bg-zinc-50 hover:border-brand-bright/20">
+               Sobre Nosotros <Star size={22} />
+            </Link>
+          </div>
+        </motion.div>
+
+        <motion.div 
+           initial={{ opacity: 0, scale: 0.9 }} 
+           animate={{ opacity: 1, scale: 1 }}
+           transition={{ duration: 1 }}
+           className="relative z-10"
+        >
+          <div className="absolute inset-0 bg-brand-bright/10 blur-[120px] rounded-full scale-150 pointer-events-none -z-10"></div>
+          <div className="relative card !p-2 bg-white border-8 border-zinc-50 shadow-2xl rounded-[3rem] overflow-hidden">
+             <img src="https://images.unsplash.com/photo-1460925895917-afdab827c52f?auto=format&fit=crop&q=80&w=2426" alt="Dashboard" className="rounded-[2.5rem] w-full" />
+             <div className="absolute bottom-10 left-10 card !bg-white/95 backdrop-blur-xl border-none shadow-2xl p-6 flex gap-5 items-center">
+                <div className="w-14 h-14 rounded-2xl bg-brand-bright text-white flex items-center justify-center shadow-lg shadow-brand-bright/30">
+                   <TrendingUp size={28} />
+                </div>
+                <div>
+                   <p className="text-[10px] font-black uppercase text-zinc-400 tracking-[0.2em] mb-1">Impacto Profesional</p>
+                   <p className="text-2xl font-black">+45% Éxito</p>
+                </div>
+             </div>
+          </div>
+        </motion.div>
+      </section>
+
+      {/* How it Works Section */}
+      <section className="py-32 bg-white overflow-hidden">
+         <div className="max-w-7xl mx-auto px-6">
+            <div className="text-center mb-24">
+               <span className="text-brand-bright text-[10px] font-black uppercase tracking-[0.3em] mb-4 block">Proceso de Éxito</span>
+               <h2 className="text-5xl font-black tracking-tighter italic uppercase italic">¿Cómo funciona Career Flow?</h2>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-20 relative px-4 z-10">
+               <div className="absolute top-1/2 left-0 w-full h-1 bg-zinc-50 -translate-y-1/2 hidden md:block -z-10 opacity-50"></div>
+               {[
+                 { 
+                   step: '01', 
+                   title: 'Sube tu Perfil', 
+                   desc: 'Importa tu CV actual o crea uno desde cero con nuestro editor inteligente.',
+                   icon: FileText,
+                   link: '/cv-builder'
+                 },
+                 { 
+                   step: '02', 
+                   title: 'Analiza con IA', 
+                   desc: 'Nuestra tecnología escanea miles de vacantes para darte recomendaciones exactas.',
+                   icon: Cpu,
+                   link: '/cv-analyzer'
+                 },
+                 { 
+                   step: '03', 
+                   title: 'Conquista la Oferta', 
+                   desc: 'Simula la entrevista con IA y genera las cartas perfectas para ser contratado.',
+                   icon: Target,
+                   link: '/interview'
+                 }
+               ].map((s, i) => (
+                 <motion.div 
+                    key={i}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    initial={{ opacity: 0, y: 30 }}
+                    viewport={{ once: true }}
+                    className="relative z-10 text-center group"
+                 >
+                    <Link to={s.link} className="block group">
+                      <div className="w-20 h-20 rounded-3xl bg-brand-bright text-white flex items-center justify-center mx-auto mb-8 text-3xl font-black italic shadow-xl shadow-brand-bright/30 border-4 border-white group-hover:scale-110 transition-transform">
+                         <s.icon size={32} />
+                      </div>
+                      <h3 className="text-2xl font-bold mb-4 group-hover:text-brand-bright transition-colors">{s.title}</h3>
+                      <p className="text-zinc-500 leading-relaxed text-sm px-4">{s.desc}</p>
+                      <div className="mt-6 text-[10px] font-black text-brand-bright uppercase tracking-widest">{s.step} Paso</div>
+                    </Link>
+                 </motion.div>
+               ))}
+            </div>
+         </div>
       </section>
 
       {/* Features Grid */}
-      <section id="features" className="py-24 bg-zinc-50">
-        <div className="container mx-auto px-6 max-w-7xl">
-          <div className="text-center mb-16 space-y-4">
-            <h2 className="text-3xl md:text-4xl font-bold text-brand-dark">Todo lo que necesitas para triunfar</h2>
-            <p className="text-zinc-500 max-w-2xl mx-auto">Herramientas diseñadas por expertos en reclutamiento potenciadas por inteligencia artificial.</p>
-          </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            {[
-              {
-                title: "Constructor de CV",
-                desc: "Formularios inteligentes que te guían paso a paso para crear una hoja de vida optimizada para ATS.",
-                icon: FileText,
-                color: "bg-blue-500"
-              },
-              {
-                title: "Simulador de Entrevistas",
-                desc: "Practica con una IA que simula entrevistas reales y te da feedback detallado sobre tus respuestas.",
-                icon: Mic2,
-                color: "bg-green-500"
-              },
-              {
-                title: "Generador de Documentos",
-                desc: "Crea cartas de presentación, contratos y correos formales en segundos con un tono profesional.",
-                icon: FilePlus,
-                color: "bg-purple-500"
-              }
-            ].map((feature, i) => (
-              <motion.div
-                key={i}
-                whileHover={{ y: -10 }}
-                className="p-8 bg-white rounded-2xl border shadow-sm hover:shadow-xl transition-all"
-              >
-                <div className={cn("w-12 h-12 rounded-xl flex items-center justify-center mb-6 text-white", feature.color)}>
-                  <feature.icon className="h-6 w-6" />
-                </div>
-                <h3 className="text-xl font-bold mb-3 text-brand-dark">{feature.title}</h3>
-                <p className="text-zinc-500 leading-relaxed">{feature.desc}</p>
-              </motion.div>
-            ))}
-          </div>
+      <section id="features" className="bg-zinc-50/50 py-32 border-y border-zinc-100">
+        <div className="max-w-7xl mx-auto px-6">
+           <div className="text-center max-w-2xl mx-auto mb-24">
+              <h2 className="text-5xl font-black tracking-tight mb-6 text-brand-dark italic uppercase italic">Poder absoluto <br />en tus manos</h2>
+              <p className="text-lg text-zinc-500">Herramientas que antes eran exclusivas para agencias de reclutamiento.</p>
+           </div>
+
+           <motion.div 
+              variants={container} initial="hidden" whileInView="show"
+              className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10"
+           >
+              {[
+                { title: 'Generación Dinámica', desc: 'Crea CVs, cartas de presentación y perfiles LinkedIn con el tono profesional perfecto.', icon: Zap },
+                { title: 'Análisis ATS Real', desc: 'Escanea tu CV con la misma tecnología que usan las empresas de Fortune 500.', icon: Search },
+                { title: 'Simulador de Entrevistas', desc: 'Recibe feedback instantáneo de una IA sobre tu tono de voz y respuestas clave.', icon: MessageSquare },
+                { title: 'IA Semántica Pro', desc: 'Analizamos palabras clave ocultas en las ofertas para resaltar tu experiencia.', icon: Globe },
+                { title: 'Exportación Formateada', desc: 'Descarga tus documentos listos para impresión o envío digital en alta calidad.', icon: Download },
+                { title: 'Racha de Éxito', desc: 'Lleva el control de tus aplicaciones y mantente motivado con gamificación profesional.', icon: TrendingUp },
+              ].map((f, i) => (
+                <motion.div key={i} variants={item} className="card group hover:!border-brand-bright transition-all p-12 bg-white shadow-sm hover:shadow-2xl border-zinc-100">
+                   <div className="w-16 h-16 rounded-2xl bg-zinc-50 text-brand-bright flex items-center justify-center mb-8 group-hover:bg-brand-bright group-hover:text-white transition-all transform group-hover:rotate-6 shadow-sm">
+                      <f.icon size={32} />
+                   </div>
+                   <h3 className="text-2xl font-black mb-4 text-brand-dark">{f.title}</h3>
+                   <p className="text-zinc-500 leading-relaxed text-base">{f.desc}</p>
+                </motion.div>
+              ))}
+           </motion.div>
         </div>
       </section>
 
-      {/* Stats Section */}
-      <section className="py-24">
-        <div className="container mx-auto px-6 max-w-7xl">
-          <div className="bg-brand-dark rounded-[2.5rem] p-12 md:p-20 text-white relative overflow-hidden">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-12 items-center relative z-10">
-              <div className="space-y-6">
-                <h2 className="text-4xl md:text-5xl font-bold leading-tight">Optimiza tu tiempo y aumenta tus posibilidades</h2>
-                <p className="text-zinc-400 text-lg">Nuestros usuarios reportan un aumento del 40% en llamadas para entrevistas tras usar nuestras herramientas de optimización.</p>
-                <div className="space-y-4">
-                  {[
-                    "Análisis de CV en tiempo real",
-                    "Feedback constructivo de IA",
-                    "Exportación a formatos profesionales",
-                    "Privacidad y seguridad garantizada"
-                  ].map((item, i) => (
-                    <div key={i} className="flex items-center gap-3">
-                      <CheckCircle2 className="h-5 w-5 text-brand-light" />
-                      <span className="font-medium">{item}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="p-8 bg-white/5 rounded-2xl border border-white/10 backdrop-blur-sm text-center">
-                  <p className="text-4xl font-bold text-brand-light mb-2">95%</p>
-                  <p className="text-sm text-zinc-400">Satisfacción</p>
-                </div>
-                <div className="p-8 bg-white/5 rounded-2xl border border-white/10 backdrop-blur-sm text-center">
-                  <p className="text-4xl font-bold text-brand-light mb-2">+10k</p>
-                  <p className="text-sm text-zinc-400">CVs Generados</p>
-                </div>
-                <div className="p-8 bg-white/5 rounded-2xl border border-white/10 backdrop-blur-sm text-center">
-                  <p className="text-4xl font-bold text-brand-light mb-2">24/7</p>
-                  <p className="text-sm text-zinc-400">Soporte IA</p>
-                </div>
-                <div className="p-8 bg-white/5 rounded-2xl border border-white/10 backdrop-blur-sm text-center">
-                  <p className="text-4xl font-bold text-brand-light mb-2">Free</p>
-                  <p className="text-sm text-zinc-400">Plan Inicial</p>
-                </div>
-              </div>
-            </div>
-            {/* Decorative circles */}
-            <div className="absolute -top-20 -right-20 w-64 h-64 bg-brand-medium/20 rounded-full blur-3xl" />
-            <div className="absolute -bottom-20 -left-20 w-64 h-64 bg-brand-light/10 rounded-full blur-3xl" />
-          </div>
-        </div>
-      </section>
-
-      {/* CTA Section */}
-      <section className="py-24 bg-zinc-50">
-        <div className="container mx-auto px-6 max-w-7xl text-center space-y-8">
-          <h2 className="text-4xl font-bold text-brand-dark">¿Listo para transformar tu futuro profesional?</h2>
-          <p className="text-zinc-500 max-w-xl mx-auto text-lg">Únete a miles de profesionales que ya están usando CareerFlow AI para alcanzar sus metas.</p>
-          <Link to="/login">
-            <Button size="lg" className="bg-brand-medium hover:bg-brand-dark h-14 px-12 text-lg rounded-xl">
-              Empezar ahora gratis
-            </Button>
-          </Link>
-        </div>
-      </section>
-
+      {/* Footer */}
       <Footer />
     </div>
   );
-}
+};
+
+export default Home;

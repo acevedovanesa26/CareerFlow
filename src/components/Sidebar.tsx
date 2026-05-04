@@ -1,149 +1,107 @@
-import * as React from "react";
-import { Link, useLocation } from "react-router-dom";
+import React from 'react';
+import { NavLink } from 'react-router-dom';
 import { 
   LayoutDashboard, 
   FileText, 
-  Mic2, 
-  FilePlus, 
+  FileEdit, 
+  Search, 
+  MessageSquare, 
   User, 
-  Settings, 
   LogOut,
   ChevronLeft,
   ChevronRight,
-  Briefcase,
-  FileSearch
-} from "lucide-react";
-import { cn } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Separator } from "@/components/ui/separator";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+  Briefcase
+} from 'lucide-react';
+import { motion } from 'motion/react';
+import { useAuth } from '../context/AuthContext';
 
-interface SidebarProps extends React.HTMLAttributes<HTMLDivElement> {
-  user?: any;
-  onLogout?: () => void;
+interface SidebarProps {
+  isOpen: boolean;
+  toggle: () => void;
 }
 
-export function Sidebar({ className, user, onLogout }: SidebarProps) {
-  const location = useLocation();
-  const [isCollapsed, setIsCollapsed] = React.useState(false);
+const Sidebar: React.FC<SidebarProps> = ({ isOpen, toggle }) => {
+  const { logout } = useAuth();
 
-  const routes = [
-    {
-      label: "Dashboard",
-      icon: LayoutDashboard,
-      href: "/dashboard",
-      color: "text-brand-light",
-    },
-    {
-      label: "Constructor de CV",
-      icon: FileText,
-      href: "/cv-builder",
-      color: "text-brand-light",
-    },
-    {
-      label: "Analizador de CV",
-      icon: FileSearch,
-      href: "/cv-analyzer",
-      color: "text-brand-light",
-    },
-    {
-      label: "Simulador de Entrevistas",
-      icon: Mic2,
-      href: "/interview",
-      color: "text-brand-light",
-    },
-    {
-      label: "Generador de Documentos",
-      icon: FilePlus,
-      href: "/docs",
-      color: "text-brand-light",
-    },
+  const menuItems = [
+    { name: 'Dashboard', icon: LayoutDashboard, path: '/dashboard' },
+    { name: 'Documentos', icon: FileText, path: '/docs' },
+    { name: 'Constructor CV', icon: FileEdit, path: '/cv-builder' },
+    { name: 'Analizador CV', icon: Search, path: '/cv-analyzer' },
+    { name: 'Entrevistas', icon: MessageSquare, path: '/interview' },
+    { name: 'Mi Perfil', icon: User, path: '/profile' },
   ];
 
   return (
-    <div className={cn(
-      "relative flex flex-col h-full border-r bg-brand-dark text-white transition-all duration-300",
-      isCollapsed ? "w-20" : "w-64",
-      className
-    )}>
-      <div className="flex items-center justify-between p-6">
-        {!isCollapsed && (
-          <Link to="/" className="flex items-center gap-2">
-            <div className="p-1 bg-brand-light rounded-lg">
-              <Briefcase className="w-6 h-6 text-brand-dark" />
-            </div>
-            <span className="font-bold text-xl tracking-tight">CareerFlow AI</span>
-          </Link>
-        )}
-        {isCollapsed && (
-          <div className="p-1 bg-brand-light rounded-lg mx-auto">
-            <Briefcase className="w-6 h-6 text-brand-dark" />
+    <motion.aside
+      initial={false}
+      animate={{ width: isOpen ? 260 : 80 }}
+      className="bg-white border-r border-zinc-100 flex flex-col transition-all duration-300 relative z-40 hidden md:flex h-screen sticky top-0"
+    >
+      <div className="p-6 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="bg-brand-bright p-2 rounded-lg shadow-sm">
+            <Briefcase size={24} className="text-white" />
           </div>
-        )}
-      </div>
-
-      <ScrollArea className="flex-1 px-3">
-        <div className="space-y-2 py-2">
-          {routes.map((route) => (
-            <Link
-              key={route.href}
-              to={route.href}
-              className={cn(
-                "group flex p-3 w-full justify-start font-medium cursor-pointer hover:bg-white/10 rounded-lg transition",
-                location.pathname === route.href ? "bg-white/10 text-brand-light" : "text-zinc-400",
-                isCollapsed && "justify-center"
-              )}
+          {isOpen && (
+            <motion.span 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="text-xl font-black tracking-tight text-brand-dark whitespace-nowrap italic uppercase"
             >
-              <div className="flex items-center flex-1">
-                <route.icon className={cn("h-5 w-5", !isCollapsed && "mr-3", route.color)} />
-                {!isCollapsed && route.label}
-              </div>
-            </Link>
-          ))}
-        </div>
-      </ScrollArea>
-
-      <div className="p-4 mt-auto">
-        <Separator className="mb-4 bg-white/10" />
-        <div className={cn(
-          "flex items-center gap-3",
-          isCollapsed ? "justify-center" : "px-2"
-        )}>
-          <Avatar className="h-9 w-9 border border-white/20">
-            <AvatarImage src={user?.photoURL} />
-            <AvatarFallback className="bg-brand-medium text-white">
-              {user?.displayName?.charAt(0) || "U"}
-            </AvatarFallback>
-          </Avatar>
-          {!isCollapsed && (
-            <div className="flex flex-col overflow-hidden">
-              <p className="text-sm font-medium truncate">{user?.displayName || "Usuario"}</p>
-              <p className="text-xs text-zinc-400 truncate">{user?.email}</p>
-            </div>
+              Career Flow
+            </motion.span>
           )}
         </div>
-        <Button 
-          variant="ghost" 
-          className={cn(
-            "w-full mt-4 text-zinc-400 hover:text-white hover:bg-white/10",
-            isCollapsed ? "justify-center px-0" : "justify-start"
-          )}
-          onClick={onLogout}
-        >
-          <LogOut className={cn("h-5 w-5", !isCollapsed && "mr-3")} />
-          {!isCollapsed && "Cerrar Sesión"}
-        </Button>
       </div>
 
-      <Button
-        variant="ghost"
-        size="icon"
-        className="absolute -right-4 top-20 h-8 w-8 rounded-full border bg-white text-brand-dark hover:bg-zinc-100 hidden md:flex"
-        onClick={() => setIsCollapsed(!isCollapsed)}
+      <nav className="flex-1 mt-4 px-4 space-y-1">
+        {menuItems.map((item) => (
+          <NavLink
+            key={item.name}
+            to={item.path}
+            className={({ isActive }) => `
+              flex items-center gap-4 p-3 rounded-xl transition-all group
+              ${isActive 
+                ? 'bg-brand-bright/10 text-brand-bright font-bold' 
+                : 'hover:bg-zinc-50 text-zinc-500 hover:text-brand-dark font-medium'}
+            `}
+          >
+            <item.icon size={20} className={`min-w-[20px] ${isOpen ? '' : 'mx-auto'}`} />
+            {isOpen && (
+              <motion.span 
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="whitespace-nowrap"
+              >
+                {item.name}
+              </motion.span>
+            )}
+          </NavLink>
+        ))}
+      </nav>
+
+      <div className="p-4 border-t border-zinc-100">
+        <button
+          onClick={logout}
+          className="flex items-center gap-4 p-3 w-full rounded-xl hover:bg-red-50 text-zinc-400 hover:text-red-500 transition-all font-medium"
+        >
+          <LogOut size={20} className={`min-w-[20px] ${isOpen ? '' : 'mx-auto'}`} />
+          {isOpen && (
+              <span className="whitespace-nowrap">Cerrar Sesión</span>
+          )}
+        </button>
+      </div>
+
+      {/* Collapse Toggle */}
+      <button
+        onClick={toggle}
+        className="absolute top-1/2 -right-3 bg-white border border-zinc-200 rounded-full p-1 shadow-md text-zinc-400 hover:text-brand-bright hover:scale-110 transition-transform hidden lg:block"
       >
-        {isCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
-      </Button>
-    </div>
+        {isOpen ? <ChevronLeft size={14} /> : <ChevronRight size={14} />}
+      </button>
+    </motion.aside>
   );
-}
+};
+
+export default Sidebar;

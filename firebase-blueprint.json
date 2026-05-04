@@ -45,11 +45,52 @@
       "type": "object",
       "properties": {
         "userId": { "type": "string" },
-        "config": { "type": "object" },
-        "messages": { "type": "array" },
+        "position": { "type": "string" },
+        "area": { "type": "string" },
+        "level": { "type": "string" },
+        "modality": { "type": "string" },
+        "questionsCount": { "type": "number" },
+        "status": { "type": "string" },
+        "totalScore": { "type": "number" },
+        "duration": { "type": "number" },
+        "completedAt": { "type": "string", "format": "date-time" },
+        "questions": { "type": "array" }
+      },
+      "required": ["userId", "position", "questions", "completedAt"]
+    },
+    "CVAnalysis": {
+      "title": "CV Analysis",
+      "description": "AI-powered CV analysis and feedback",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "fileName": { "type": "string" },
+        "overallScore": { "type": "number" },
+        "atsCompatible": { "type": "boolean" },
         "createdAt": { "type": "string", "format": "date-time" }
       },
-      "required": ["userId", "config", "messages", "createdAt"]
+      "required": ["userId", "overallScore", "createdAt"]
+    },
+    "BlogComment": {
+      "title": "Blog Comment",
+      "description": "Public comments on the blog",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "text": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "text", "createdAt"]
+    },
+    "NewsletterSub": {
+      "title": "Newsletter Subscription",
+      "description": "Emails for news updates",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string", "format": "email" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["email", "createdAt"]
     }
   },
   "firestore": {
@@ -68,6 +109,18 @@
     "/interviews/{interviewId}": {
       "schema": "Interview",
       "description": "Interview history"
+    },
+    "/blog_comments/{commentId}": {
+      "schema": "BlogComment",
+      "description": "Public blog comments"
+    },
+    "/newsletter_subs/{subId}": {
+      "schema": "NewsletterSub",
+      "description": "Newsletter subscriptions"
+    },
+    "/cv_analyses/{analysisId}": {
+      "schema": "CVAnalysis",
+      "description": "CV analysis reports"
     }
   }
 }

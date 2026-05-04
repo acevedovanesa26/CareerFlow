@@ -1,382 +1,455 @@
-import * as React from "react";
-import { PageHeader } from "@/components/PageHeader";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Badge } from "@/components/ui/badge";
-import { cn } from "@/lib/utils";
-import { INTERVIEW_AREAS, INTERVIEW_LEVELS } from "@/constants";
-import { generateCareerContent, SYSTEM_PROMPTS } from "@/lib/gemini";
-import { db, collection, addDoc, updateDoc, doc, serverTimestamp, auth, query, where, onSnapshot, deleteDoc } from "@/lib/firebase";
-import { Mic2, Send, User, Bot, Sparkles, RefreshCcw, CheckCircle2, AlertCircle, Trash2, Clock, MessageSquare } from "lucide-react";
-import { toast } from "sonner";
-import { motion, AnimatePresence } from "motion/react";
-import ReactMarkdown from "react-markdown";
+import React, { useState, useEffect, useRef } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
+import { 
+  MessageSquare, 
+  Send, 
+  User, 
+  Mic, 
+  TrendingUp, 
+  ChevronRight, 
+  Play,
+  RotateCcw,
+  Trophy,
+  CheckCircle2,
+  Clock,
+  Briefcase,
+  AlertCircle,
+  Wand2,
+  Star,
+  Zap
+} from 'lucide-react';
+import { MODALIDADES_ENTREVISTA, AREAS_PROFESIONALES, SYSTEM_PROMPTS } from '../constants';
+import { callingGeminiWithRetry } from '../lib/gemini';
+import { useAuth } from '../context/AuthContext';
+import { db, doc, setDoc, serverTimestamp, increment, updateDoc, handleFirestoreError, OperationType } from '../lib/firebase';
+import { InterviewData, InterviewQuestion } from '../types';
+import toast from 'react-hot-toast';
+import confetti from 'canvas-confetti';
 
-interface Message {
-  role: 'bot' | 'user';
-  content: string;
-  feedback?: string;
-  score?: number;
-}
-
-export default function InterviewSimulator() {
-  const [isStarted, setIsStarted] = React.useState(false);
-  const [interviewId, setInterviewId] = React.useState<string | null>(null);
-  const [config, setConfig] = React.useState({
-    role: "",
-    area: "",
-    level: "",
+const InterviewSimulator: React.FC = () => {
+  const { user, profile, refreshProfile } = useAuth();
+  
+  // Game State
+  const [gameState, setGameState] = useState<'setup' | 'loading' | 'active' | 'completed'>('setup');
+  const [config, setConfig] = useState({
+    position: '',
+    area: AREAS_PROFESIONALES[0],
+    level: 'junior',
+    modality: 'conductual',
+    questionsCount: 5,
+    language: 'es'
   });
-  const [messages, setMessages] = React.useState<Message[]>([]);
-  const [history, setHistory] = React.useState<any[]>([]);
-  const [input, setInput] = React.useState("");
-  const [isLoading, setIsLoading] = React.useState(false);
-  const messagesEndRef = React.useRef<HTMLDivElement>(null);
 
-  React.useEffect(() => {
-    if (!auth.currentUser) return;
-    const q = query(collection(db, "interviews"), where("userId", "==", auth.currentUser.uid));
-    const unsubscribe = onSnapshot(q, (snap) => {
-      const docs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      setHistory(docs.sort((a: any, b: any) => b.createdAt?.seconds - a.createdAt?.seconds));
-    });
-    return () => unsubscribe();
-  }, []);
+  const [questions, setQuestions] = useState<any[]>([]);
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [userAnswer, setUserAnswer] = useState('');
+  const [answers, setAnswers] = useState<InterviewQuestion[]>([]);
+  const [finalScore, setFinalScore] = useState<number>(0);
+  const [submitting, setSubmitting] = useState(false);
+  const [timer, setTimer] = useState(0);
+  const intervalRef = useRef<any>(null);
 
-  const handleDeleteInterview = async (id: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    try {
-      await deleteDoc(doc(db, "interviews", id));
-      toast.success("Entrevista eliminada.");
-      if (interviewId === id) {
-        resetInterview();
-      }
-    } catch (error) {
-      toast.error("Error al eliminar.");
+  useEffect(() => {
+    if (gameState === 'active') {
+       intervalRef.current = setInterval(() => setTimer(t => t + 1), 1000);
+    } else {
+       clearInterval(intervalRef.current);
     }
-  };
+    return () => clearInterval(intervalRef.current);
+  }, [gameState]);
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
-
-  React.useEffect(() => {
-    scrollToBottom();
-  }, [messages, isLoading]);
-
-  const saveInterview = async (newMessages: Message[]) => {
-    if (!auth.currentUser) return;
-
+  const handleStart = async () => {
+    if (!config.position) {
+      toast.error('Por favor ingresa un cargo');
+      return;
+    }
+    
+    setGameState('loading');
+    setAnswers([]);
+    setCurrentIndex(0);
+    setFinalScore(0);
     try {
-      if (!interviewId) {
-        const docRef = await addDoc(collection(db, "interviews"), {
-          userId: auth.currentUser.uid,
-          config,
-          messages: newMessages,
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-        });
-        setInterviewId(docRef.id);
+      const prompt = SYSTEM_PROMPTS.INTERVIEW_QUESTION_GENERATOR
+        .replace('{count}', String(config.questionsCount))
+        .replace('{position}', config.position)
+        .replace('{area}', config.area)
+        .replace('{level}', config.level)
+        .replace('{modality}', config.modality);
+
+      const result = await callingGeminiWithRetry(prompt, "Eres un entrevistador senior.", true);
+      setQuestions(result.questions);
+      setGameState('active');
+      setTimer(0);
+    } catch (e: any) {
+      if (e.message.includes('429') || e.message.includes('quota')) {
+        toast.error('Has alcanzado el límite de uso de IA por hoy. Inténtalo de nuevo mañana o usa tu propio API Key.', { duration: 10000 });
       } else {
-        await updateDoc(doc(db, "interviews", interviewId), {
-          messages: newMessages,
-          updatedAt: serverTimestamp(),
-        });
+        toast.error('Error al generar preguntas: ' + e.message);
       }
-    } catch (error) {
-      console.error("Error saving interview:", error);
+      setGameState('setup');
     }
   };
 
-  const startInterview = async () => {
-    if (!config.role || !config.area || !config.level) {
-      toast.error("Por favor completa todos los campos de configuración.");
+  const handleNext = async () => {
+    if (!userAnswer.trim()) {
+      toast.error('Por favor escribe tu respuesta antes de continuar');
       return;
     }
 
-    setIsStarted(true);
-    setIsLoading(true);
+    setSubmitting(true);
     try {
-      const prompt = `Inicia una entrevista para el cargo de ${config.role} en el área de ${config.area} para un nivel ${config.level}. Preséntate brevemente y haz la primera pregunta.`;
-      const response = await generateCareerContent(prompt, SYSTEM_PROMPTS.INTERVIEW_SIMULATOR);
-      if (response) {
-        const initialMessages: Message[] = [{ role: 'bot', content: response }];
-        setMessages(initialMessages);
-        saveInterview(initialMessages);
+      const prompt = SYSTEM_PROMPTS.INTERVIEW_EVALUATOR
+        .replace('{position}', config.position)
+        .replace('{question}', questions[currentIndex].question)
+        .replace('{userAnswer}', userAnswer);
+
+      const evaluation = await callingGeminiWithRetry(prompt, "Eres un evaluador de RRHH experto.", true);
+      
+      const answerRecord: InterviewQuestion = {
+        question: questions[currentIndex].question,
+        userAnswer,
+        aiScore: evaluation.overallScore,
+        aiFeedback: evaluation.feedback,
+        idealAnswer: evaluation.idealAnswer,
+        timeSpent: timer,
+        type: questions[currentIndex].type,
+        difficulty: questions[currentIndex].difficulty
+      };
+
+      setAnswers([...answers, answerRecord]);
+      setUserAnswer('');
+      setTimer(0);
+
+      if (currentIndex < questions.length - 1) {
+        setCurrentIndex(currentIndex + 1);
+      } else {
+        await finishInterview([...answers, answerRecord]);
       }
-    } catch (error) {
-      console.error(error);
-      toast.error("Error al iniciar la entrevista.");
-      setIsStarted(false);
+    } catch (e: any) {
+      toast.error('Error al evaluar respuesta: ' + e.message);
     } finally {
-      setIsLoading(false);
+      setSubmitting(false);
     }
   };
 
-  const handleSend = async () => {
-    if (!input.trim() || isLoading) return;
-
-    const userMessage = input.trim();
-    setInput("");
-    const updatedMessagesWithUser: Message[] = [...messages, { role: 'user', content: userMessage }];
-    setMessages(updatedMessagesWithUser);
-    setIsLoading(true);
+  const finishInterview = async (allAnswers: InterviewQuestion[]) => {
+    if (!user) return;
+    
+    const totalScore = Math.round(allAnswers.reduce((acc, curr) => acc + curr.aiScore, 0) / allAnswers.length);
+    setFinalScore(totalScore);
+    
+    const interviewData: InterviewData = {
+      userId: user.uid,
+      ...config as any,
+      status: 'completada',
+      totalScore,
+      dimensionScores: {
+        claridad: 80, // Simulation, would come from AI ideally
+        coherencia: 75,
+        profesionalismo: 90,
+        relevancia: 85,
+        estructuraSTAR: 70
+      },
+      duration: allAnswers.reduce((acc, curr) => acc + curr.timeSpent, 0),
+      completedAt: serverTimestamp(),
+      questions: allAnswers
+    };
 
     try {
-      const history = updatedMessagesWithUser.map(m => `${m.role === 'bot' ? 'Entrevistador' : 'Candidato'}: ${m.content}`).join("\n");
-      const prompt = `Historial de la entrevista:\n${history}\n\nCandidato: ${userMessage}\n\nComo entrevistador, evalúa brevemente la respuesta anterior (da un puntaje de 1 a 10 y feedback constructivo) y luego haz la siguiente pregunta de la entrevista. Devuelve el resultado en un formato claro: [FEEDBACK] ... [SCORE] ... [NEXT_QUESTION] ...`;
-      
-      const response = await generateCareerContent(prompt, SYSTEM_PROMPTS.INTERVIEW_SIMULATOR);
-      
-      if (response) {
-        // Simple parsing for feedback and score
-        const feedbackMatch = response.match(/\[FEEDBACK\](.*?)\[SCORE\]/s);
-        const scoreMatch = response.match(/\[SCORE\](.*?)\[NEXT_QUESTION\]/s);
-        const nextQuestionMatch = response.match(/\[NEXT_QUESTION\](.*)/s);
+      // Save to Firebase
+      const interviewId = `interview_${user.uid}_${Date.now()}`;
+      await setDoc(doc(db, 'interviews', interviewId), interviewData);
 
-        const feedback = feedbackMatch ? feedbackMatch[1].trim() : undefined;
-        const score = scoreMatch ? parseInt(scoreMatch[1].trim()) : undefined;
-        const nextQuestion = nextQuestionMatch ? nextQuestionMatch[1].trim() : response;
-
-        const finalMessages: Message[] = [
-          ...messages,
-          { role: 'user', content: userMessage, feedback, score },
-          { role: 'bot', content: nextQuestion }
-        ];
-        
-        setMessages(finalMessages);
-        saveInterview(finalMessages);
-      }
-    } catch (error) {
-      console.error(error);
-      toast.error("Error al procesar tu respuesta.");
-    } finally {
-      setIsLoading(false);
+      // Update user stats
+      await updateDoc(doc(db, 'users', user.uid), {
+        'stats.totalInterviews': increment(1),
+        'stats.averageScore': Math.round(((profile?.stats?.averageScore || 0) * (profile?.stats?.totalInterviews || 0) + totalScore) / ((profile?.stats?.totalInterviews || 0) + 1)),
+        'stats.bestScore': totalScore > (profile?.stats?.bestScore || 0) ? totalScore : (profile?.stats?.bestScore || 0),
+        'stats.streakDays': increment(1)
+      });
+    } catch (e: any) {
+      console.error("Error saving interview results:", e);
+      handleFirestoreError(e, OperationType.WRITE, 'interviews');
     }
-  };
 
-  const resetInterview = () => {
-    setIsStarted(false);
-    setInterviewId(null);
-    setMessages([]);
-    setConfig({ role: "", area: "", level: "" });
+    setGameState('completed');
+    await refreshProfile();
+
+    if (totalScore >= 80) {
+      confetti({
+        particleCount: 150,
+        spread: 70,
+        origin: { y: 0.6 },
+        colors: ['#27AE60', '#2ECC71', '#ffffff']
+      });
+      toast.success('¡Excelente desempeño! Superaste los 80 puntos.', { duration: 5000, icon: '🏆' });
+    }
   };
 
   return (
-    <div className="space-y-6 h-[calc(100vh-100px)] flex flex-col pb-2">
-      <PageHeader 
-        title="Simulador de Entrevistas" 
-        description="Practica entrevistas reales con nuestra IA y recibe feedback instantáneo."
-        className="mb-0"
-      >
-        {isStarted && (
-          <Button variant="outline" onClick={resetInterview}>
-            <RefreshCcw className="mr-2 h-4 w-4" /> Reiniciar
-          </Button>
-        )}
-      </PageHeader>
+    <div className="max-w-4xl mx-auto h-full flex flex-col">
+      <AnimatePresence mode="wait">
+        
+        {/* Setup State */}
+        {gameState === 'setup' && (
+          <motion.div 
+            key="setup"
+            initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
+            className="flex flex-col gap-8 py-8"
+          >
+            <div className="text-center space-y-2">
+              <h1 className="text-4xl font-extrabold tracking-tight">Simulador de Entrevistas Pro</h1>
+              <p className="text-zinc-500">Practica con nuestra IA entrenada para detectar fortalezas y debilidades profesionales.</p>
+            </div>
 
-      {!isStarted ? (
-        <motion.div 
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
-          className="flex-1 flex items-center justify-center overflow-y-auto min-h-0"
-        >
-          <Card className="w-full max-w-2xl">
-            <CardHeader className="text-center">
-              <div className="mx-auto w-16 h-16 bg-brand-medium/10 rounded-full flex items-center justify-center mb-4">
-                <Mic2 className="h-8 w-8 text-brand-medium" />
-              </div>
-              <CardTitle className="text-2xl">Configura tu Entrevista</CardTitle>
-              <CardDescription>Dinos para qué cargo te estás preparando.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-2">
-                  <Label>Cargo / Posición</Label>
-                  <Input 
-                    placeholder="Ej: Desarrollador Frontend" 
-                    value={config.role}
-                    onChange={(e) => setConfig(prev => ({ ...prev, role: e.target.value }))}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Área Profesional</Label>
-                  <Select onValueChange={(v: string) => setConfig(prev => ({ ...prev, area: v }))}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecciona un área" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {INTERVIEW_AREAS.map(area => (
-                        <SelectItem key={area} value={area}>{area}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label>Nivel de Experiencia</Label>
-                  <Select onValueChange={(v: string) => setConfig(prev => ({ ...prev, level: v }))}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecciona un nivel" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {INTERVIEW_LEVELS.map(level => (
-                        <SelectItem key={level} value={level}>{level}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              <Button 
-                className="w-full bg-brand-medium hover:bg-brand-dark h-12 text-lg"
-                onClick={startInterview}
-                disabled={isLoading}
-              >
-                {isLoading ? "Iniciando..." : "Comenzar Simulación"}
-              </Button>
-
-              {history.length > 0 && (
-                <div className="pt-6 border-t">
-                  <h3 className="text-sm font-bold text-zinc-500 uppercase tracking-widest mb-4 flex items-center gap-2">
-                    <Clock className="h-4 w-4" /> Historial de Entrevistas
-                  </h3>
-                  <div className="space-y-3">
-                    {history.slice(0, 3).map((item) => (
-                      <div 
-                        key={item.id} 
-                        className="flex items-center justify-between p-3 border rounded-xl hover:bg-zinc-50 transition-colors cursor-pointer"
-                        onClick={() => {
-                          setInterviewId(item.id);
-                          setMessages(item.messages);
-                          setConfig(item.config);
-                          setIsStarted(true);
-                        }}
-                      >
-                        <div className="flex items-center gap-3 overflow-hidden">
-                          <div className="p-2 bg-brand-light/20 rounded-lg shrink-0">
-                            <MessageSquare className="h-4 w-4 text-brand-medium" />
-                          </div>
-                          <div className="overflow-hidden">
-                            <p className="text-sm font-semibold text-brand-dark truncate">{item.config.role}</p>
-                            <p className="text-[10px] text-zinc-500">{item.createdAt?.toDate().toLocaleDateString()}</p>
-                          </div>
-                        </div>
-                        <Button 
-                          variant="ghost" 
-                          size="sm" 
-                          onClick={(e) => handleDeleteInterview(item.id, e)}
-                          className="text-zinc-400 hover:text-red-500"
+            <div className="card grid grid-cols-1 md:grid-cols-2 gap-8 !p-8 border-brand-bright/20 border-2">
+               <div className="space-y-6">
+                  <div>
+                    <label className="label">¿Para qué cargo te preparas?</label>
+                    <div className="relative">
+                      <Briefcase className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400" size={18} />
+                      <input 
+                        type="text" 
+                        value={config.position} 
+                        onChange={e => setConfig({ ...config, position: e.target.value })}
+                        className="input-field pl-11"
+                        placeholder="Ej: Gerente de Ventas"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="label">Nivel de Seniority</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      {['junior', 'intermedio', 'senior', 'liderazgo'].map(lv => (
+                        <button 
+                          key={lv}
+                          onClick={() => setConfig({ ...config, level: lv as any })}
+                          className={`py-2 px-3 rounded-xl border text-xs font-bold capitalize transition-all ${
+                            config.level === lv ? 'bg-brand-bright text-white border-brand-bright' : 'bg-transparent text-zinc-500 border-zinc-200'
+                          }`}
                         >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    ))}
+                          {lv}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+               </div>
+
+               <div className="space-y-6">
+                 <div>
+                    <label className="label">Área Profesional</label>
+                    <select 
+                      value={config.area} 
+                      onChange={e => setConfig({ ...config, area: e.target.value })}
+                      className="input-field cursor-pointer"
+                    >
+                      {AREAS_PROFESIONALES.map(area => <option key={area} value={area}>{area}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="label">Cantidad de preguntas</label>
+                    <input 
+                      type="range" min="3" max="10" 
+                      value={config.questionsCount}
+                      onChange={e => setConfig({ ...config, questionsCount: parseInt(e.target.value) })}
+                      className="w-full accent-brand-bright h-2 bg-zinc-100 rounded-lg appearance-none cursor-pointer mt-4"
+                    />
+                    <div className="flex justify-between text-[10px] font-bold text-zinc-400 mt-2 px-1">
+                      <span>3 PREGUNTAS</span>
+                      <span className="text-brand-bright">{config.questionsCount} PREGUNTAS</span>
+                      <span>10 PREGUNTAS</span>
+                    </div>
+                  </div>
+               </div>
+
+               <div className="md:col-span-2 pt-4 border-t border-zinc-100 dark:border-zinc-800">
+                  <label className="label mb-4">Modalidad de la entrevista</label>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+                     {MODALIDADES_ENTREVISTA.map(mod => (
+                        <button
+                          key={mod.id}
+                          onClick={() => setConfig({ ...config, modality: mod.id as any })}
+                          className={`flex flex-col items-center gap-2 p-4 rounded-2xl border-2 transition-all ${
+                            config.modality === mod.id ? 'border-brand-bright bg-brand-bright/5' : 'border-zinc-100 dark:border-zinc-800 hover:border-zinc-200 dark:hover:border-zinc-700'
+                          }`}
+                        >
+                           <div className={`p-2 rounded-lg ${config.modality === mod.id ? 'bg-brand-bright text-white' : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-400'}`}>
+                             {mod.id === 'conductual' && <User size={20} />}
+                             {mod.id === 'tecnica' && <Wand2 size={20} />}
+                             {mod.id === 'competencias' && <Star size={20} />}
+                             {mod.id === 'situacional' && <AlertCircle size={20} />}
+                             {mod.id === 'mixta' && <RotateCcw size={20} />}
+                           </div>
+                           <span className="text-[10px] uppercase font-black text-center tracking-tighter">{mod.label}</span>
+                        </button>
+                     ))}
+                  </div>
+               </div>
+
+               <div className="md:col-span-2 pt-8 flex justify-center">
+                  <button onClick={handleStart} className="btn-primary !px-16 !py-5 text-xl flex items-center gap-4 group">
+                     Iniciar Simulación <Play size={24} className="group-hover:translate-x-1 transition-transform" />
+                  </button>
+               </div>
+            </div>
+          </motion.div>
+        )}
+
+        {/* Loading State */}
+        {gameState === 'loading' && (
+          <motion.div key="loading" className="flex-1 flex flex-col items-center justify-center gap-8">
+             <div className="relative">
+                <div className="w-32 h-32 border-4 border-zinc-100 rounded-full"></div>
+                <div className="w-32 h-32 border-4 border-brand-bright border-t-transparent rounded-full animate-spin absolute top-0"></div>
+                <MessageSquare className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-brand-bright" size={40} />
+             </div>
+             <div className="text-center">
+               <h2 className="text-2xl font-bold">Generando escenario personalizado...</h2>
+               <p className="text-zinc-500 mt-2">Nuestra IA está preparando preguntas de nivel {config.level} para {config.position}.</p>
+             </div>
+          </motion.div>
+        )}
+
+        {/* Active State */}
+        {gameState === 'active' && (
+          <motion.div key="active" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex-1 flex flex-col gap-8 py-8">
+             {/* Progress Header */}
+             <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-4">
+                  <div className="bg-brand-bright/10 text-brand-bright px-3 py-1 rounded-full text-xs font-black uppercase">
+                     Pregunta {currentIndex + 1} de {questions.length}
+                  </div>
+                  <div className="flex items-center gap-1 text-xs font-bold text-zinc-400">
+                     <Clock size={14} /> {Math.floor(timer / 60)}:{(timer % 60).toString().padStart(2, '0')}
                   </div>
                 </div>
-              )}
-            </CardContent>
-          </Card>
-        </motion.div>
-      ) : (
-        <div className="flex-1 flex flex-col gap-4 overflow-hidden min-h-0">
-          <Card className="flex-1 flex flex-col overflow-hidden border-none shadow-2xl bg-white/80 backdrop-blur-sm min-h-0">
-            <ScrollArea className="flex-1 min-h-0">
-              <div className="p-6 space-y-8 pb-20">
-                {messages.map((msg, index) => (
-                  <motion.div
-                    key={index}
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className={cn(
-                      "flex gap-4 max-w-[85%]",
-                      msg.role === 'user' ? "ml-auto flex-row-reverse" : ""
-                    )}
-                  >
-                    <div className={cn(
-                      "w-10 h-10 rounded-full flex items-center justify-center shrink-0",
-                      msg.role === 'bot' ? "bg-brand-medium/10 text-brand-medium" : "bg-zinc-100 text-zinc-600"
-                    )}>
-                      {msg.role === 'bot' ? <Bot className="h-6 w-6" /> : <User className="h-6 w-6" />}
-                    </div>
-                    <div className="space-y-2">
-                      <div className={cn(
-                        "p-4 rounded-2xl text-sm leading-relaxed",
-                        msg.role === 'bot' ? "bg-zinc-50 text-zinc-800 rounded-tl-none" : "bg-brand-medium text-white rounded-tr-none"
-                      )}>
-                        <div className="prose prose-sm max-w-none">
-                          <ReactMarkdown>
-                            {msg.content}
-                          </ReactMarkdown>
-                        </div>
+                <div className="flex gap-1">
+                   {questions.map((_, i) => (
+                     <div key={i} className={`h-1 w-8 rounded-full transition-all ${i <= currentIndex ? 'bg-brand-bright' : 'bg-zinc-200'}`} />
+                   ))}
+                </div>
+             </div>
+
+             {/* Question Card */}
+             <div className="card !p-8 relative overflow-hidden bg-brand-bright/[0.03] border-2 border-brand-bright/20 shadow-xl rounded-[2.5rem]">
+                <div className="absolute -top-12 -right-12 p-8 text-brand-bright opacity-10 pointer-events-none rotate-12">
+                  <MessageSquare size={160} />
+                </div>
+                <div className="relative z-10 flex flex-col items-center text-center py-4">
+                   <div className="w-20 h-20 rounded-full bg-white flex items-center justify-center mb-8 shadow-xl shadow-brand-bright/10 ring-4 ring-brand-bright/5">
+                     <User size={36} className="text-brand-bright" />
+                   </div>
+                   <h3 className="text-2xl md:text-3xl font-black leading-tight max-w-2xl text-zinc-900">
+                     {questions[currentIndex]?.question}
+                   </h3>
+                   <div className="mt-8 flex flex-wrap justify-center gap-3">
+                      <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-white border border-brand-bright/20 rounded-full text-[10px] uppercase font-black tracking-widest text-brand-bright shadow-sm">
+                        <Zap size={14} /> Recomendación: Sé específico
+                      </div>
+                      <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-white border border-zinc-200 rounded-full text-[10px] uppercase font-black tracking-widest text-zinc-500 shadow-sm">
+                        <Star size={14} /> Nivel {config.level}
+                      </div>
+                   </div>
+                </div>
+             </div>
+
+             {/* Answer Section */}
+               <div className="flex-1 flex flex-col gap-4 relative z-30">
+                <div className="flex-1 card relative !p-6 border-2 border-zinc-200 focus-within:border-brand-bright focus-within:ring-4 focus-within:ring-brand-bright/5 transition-all bg-white shadow-xl rounded-[2rem]">
+                  <textarea 
+                    id="interview-answer-textarea"
+                    value={userAnswer}
+                    onChange={e => setUserAnswer(e.target.value)}
+                    autoFocus
+                    placeholder="Escribe tu respuesta aquí... Sé claro y estructurado."
+                    className="w-full h-full min-h-[350px] bg-transparent outline-none resize-none text-lg leading-relaxed text-zinc-900 relative z-40 p-4 font-medium"
+                  />
+                  <div className="absolute bottom-8 right-8 flex items-center gap-4 z-50">
+                     <button title="Dictar respuesta" className="p-4 bg-zinc-100 hover:bg-brand-bright hover:text-white rounded-2xl text-zinc-400 transition-all shadow-md group">
+                        <Mic size={24} className="group-hover:scale-110 transition-transform" />
+                     </button>
+                     <button 
+                       onClick={handleNext}
+                       disabled={submitting}
+                       className="btn-primary !p-5 rounded-2xl flex items-center gap-3 shadow-xl shadow-brand-bright/30"
+                     >
+                       {submitting ? <RotateCcw className="animate-spin" size={28} /> : <Send size={28} />}
+                       <span className="font-black uppercase tracking-widest text-sm">{submitting ? 'Evaluando...' : 'Enviar'}</span>
+                     </button>
+                  </div>
+                </div>
+             </div>
+          </motion.div>
+        )}
+
+        {/* Completed State */}
+        {gameState === 'completed' && (
+          <motion.div key="completed" initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} className="py-12 space-y-12 pb-24">
+             <div className="text-center space-y-4">
+                <div className="w-24 h-24 bg-brand-bright/10 text-brand-bright rounded-full flex items-center justify-center mx-auto mb-6">
+                   <Trophy size={48} />
+                </div>
+                <h2 className="text-4xl font-extrabold tracking-tight">¡Misión Completada!</h2>
+                <div className="flex items-center justify-center gap-4 py-4">
+                   <div className="text-center border-r border-zinc-200 pr-8">
+                      <p className="text-xs font-bold text-zinc-500 uppercase">Puntaje Global</p>
+                      <p className="text-5xl font-black text-brand-bright">{finalScore}</p>
+                   </div>
+                   <div className="text-center">
+                      <p className="text-xs font-bold text-zinc-500 uppercase">Nivel Estimado</p>
+                      <p className="text-3xl font-black">{config.level.toUpperCase()}</p>
+                   </div>
+                </div>
+                <button onClick={() => setGameState('setup')} className="text-brand-bright font-bold hover:underline flex items-center gap-2 mx-auto">
+                   <RotateCcw size={18} /> Intentar Simulación de nuevo
+                </button>
+             </div>
+
+             <div className="space-y-8">
+                <h3 className="text-2xl font-bold flex items-center gap-2">
+                   <TrendingUp className="text-brand-bright" /> Feedback Detallado por Pregunta
+                </h3>
+                {answers.map((ans, i) => (
+                   <div key={i} className="card !p-8 space-y-6">
+                      <div className="flex items-center justify-between">
+                         <div className="flex items-center gap-3">
+                            <span className="w-8 h-8 rounded-lg bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center font-black text-sm">#{i+1}</span>
+                            <h4 className="font-bold text-lg">{ans.question}</h4>
+                         </div>
+                         <div className="flex items-center gap-2 bg-brand-bright/10 text-brand-bright px-4 py-2 rounded-xl">
+                            <Star size={16} fill="currentColor" />
+                            <span className="font-black">{ans.aiScore}%</span>
+                         </div>
                       </div>
                       
-                      {msg.role === 'user' && msg.feedback && (
-                        <motion.div 
-                          initial={{ opacity: 0, height: 0 }}
-                          animate={{ opacity: 1, height: 'auto' }}
-                          className="bg-brand-light/20 border border-brand-light/30 p-3 rounded-xl space-y-2"
-                        >
-                          <div className="flex items-center justify-between">
-                            <span className="text-[10px] font-bold uppercase tracking-wider text-brand-medium flex items-center gap-1">
-                              <Sparkles className="h-3 w-3" /> Feedback de IA
-                            </span>
-                            {msg.score && (
-                              <Badge variant="outline" className="bg-white text-brand-medium border-brand-medium">
-                                Puntaje: {msg.score}/10
-                              </Badge>
-                            )}
-                          </div>
-                          <p className="text-xs text-brand-dark italic">"{msg.feedback}"</p>
-                        </motion.div>
-                      )}
-                    </div>
-                  </motion.div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-8 pt-4 border-t border-zinc-50">
+                         <div className="space-y-3">
+                            <p className="text-[10px] uppercase font-black text-zinc-400 tracking-widest">Tu Respuesta</p>
+                            <p className="text-sm text-zinc-600 italic">"{ans.userAnswer}"</p>
+                         </div>
+                         <div className="space-y-3">
+                            <p className="text-[10px] uppercase font-black text-zinc-400 tracking-widest">Feedback del Evaluador</p>
+                            <p className="text-sm text-zinc-600">{ans.aiFeedback}</p>
+                         </div>
+                      </div>
+
+                      <div className="bg-zinc-50 p-6 rounded-2xl">
+                         <div className="flex items-center gap-2 mb-2">
+                            <CheckCircle2 size={16} className="text-green-500" />
+                            <p className="text-xs font-black uppercase text-green-500">Respuesta Ideal Sugerida</p>
+                         </div>
+                         <p className="text-sm text-zinc-600 dark:text-zinc-400 leading-relaxed font-medium">
+                            {ans.idealAnswer}
+                         </p>
+                      </div>
+                   </div>
                 ))}
-                {isLoading && (
-                  <div className="flex gap-4 max-w-[85%]">
-                    <div className="w-10 h-10 rounded-full bg-brand-medium/10 text-brand-medium flex items-center justify-center shrink-0">
-                      <Bot className="h-6 w-6" />
-                    </div>
-                    <div className="bg-zinc-50 p-4 rounded-2xl rounded-tl-none flex gap-1">
-                      <div className="w-2 h-2 bg-zinc-300 rounded-full animate-bounce" />
-                      <div className="w-2 h-2 bg-zinc-300 rounded-full animate-bounce [animation-delay:0.2s]" />
-                      <div className="w-2 h-2 bg-zinc-300 rounded-full animate-bounce [animation-delay:0.4s]" />
-                    </div>
-                  </div>
-                )}
-                <div ref={messagesEndRef} />
-              </div>
-            </ScrollArea>
-            
-            <div className="p-4 border-t bg-zinc-50/50">
-              <div className="flex gap-2 max-w-4xl mx-auto">
-                <Input 
-                  placeholder="Escribe tu respuesta aquí..." 
-                  className="bg-white h-12"
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-                  disabled={isLoading}
-                />
-                <Button 
-                  className="h-12 w-12 bg-brand-medium hover:bg-brand-dark"
-                  onClick={handleSend}
-                  disabled={isLoading || !input.trim()}
-                >
-                  <Send className="h-5 w-5" />
-                </Button>
-              </div>
-              <p className="text-[10px] text-center text-zinc-400 mt-2">
-                Presiona Enter para enviar. La IA evaluará tu respuesta y continuará la entrevista.
-              </p>
-            </div>
-          </Card>
-        </div>
-      )}
+             </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
-}
+};
+
+export default InterviewSimulator;

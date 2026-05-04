@@ -1,56 +1,47 @@
-import * as React from "react";
-import { PageHeader } from "@/components/PageHeader";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { motion } from "motion/react";
+import React from 'react';
+import PublicNavbar from '../components/PublicNavbar';
 
-export default function Terms() {
+import { Footer } from '../components/Footer';
+
+const Terms: React.FC = () => {
   return (
-    <div className="container mx-auto px-4 py-8 max-w-4xl">
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="space-y-8"
-      >
-        <PageHeader 
-          title="Términos y Condiciones" 
-          description="Última actualización: 12 de abril de 2026"
-        />
-        
-        <Card>
-          <CardContent className="prose prose-zinc max-w-none p-8">
-            <h3>1. Aceptación de los Términos</h3>
-            <p>
-              Al acceder y utilizar CareerFlow AI, usted acepta estar sujeto a estos Términos y Condiciones. 
-              Si no está de acuerdo con alguna parte de estos términos, no podrá utilizar nuestros servicios.
+    <div className="bg-white min-h-screen text-brand-dark">
+      <PublicNavbar />
+      <main className="max-w-4xl mx-auto px-6 py-20">
+        <h1 className="text-5xl font-black mb-12 tracking-tight italic uppercase">Términos de Servicio</h1>
+        <div className="space-y-12 text-zinc-600 leading-relaxed max-w-3xl">
+          <section>
+            <h2 className="text-2xl font-bold text-brand-dark mb-4">1. Aceptación de los Términos</h2>
+            <p className="mb-4">
+              Al acceder y utilizar Career Flow, aceptas cumplir con estos términos de servicio. Si no estás de acuerdo con alguna parte de estos términos, no podrás utilizar nuestros servicios.
             </p>
+          </section>
+          
+          <section>
+            <h2 className="text-2xl font-bold text-brand-dark mb-4">2. Uso del Servicio</h2>
+            <p className="mb-4">
+              Career Flow proporciona herramientas basadas en IA para ayudar en el desarrollo profesional. No garantizamos la obtención automática de empleo, ya que los resultados dependen de la aplicación propia del usuario y factores externos del mercado.
+            </p>
+          </section>
 
-            <h3>2. Uso del Servicio</h3>
-            <p>
-              Nuestra plataforma utiliza Inteligencia Artificial para asistir en la creación de documentos profesionales 
-              y simulaciones de entrevistas. Usted es responsable de la veracidad de la información proporcionada y 
-              de la revisión final de cualquier contenido generado por la IA.
+          <section>
+            <h2 className="text-2xl font-bold text-brand-dark mb-4">3. Propiedad Intelectual</h2>
+            <p className="mb-4">
+              Mantienes la propiedad de todo el contenido que subas o generes en Career Flow. Nos otorgas una licencia limitada para procesar este contenido con el fin exclusivo de proporcionarte el servicio.
             </p>
+          </section>
 
-            <h3>3. Cuentas de Usuario</h3>
-            <p>
-              Para utilizar ciertas funciones, debe registrarse a través de una cuenta de Google. Usted es responsable 
-              de mantener la seguridad de su cuenta y de todas las actividades que ocurran bajo ella.
-            </p>
-
-            <h3>4. Propiedad Intelectual</h3>
-            <p>
-              El software, diseño y algoritmos de CareerFlow AI son propiedad exclusiva de la empresa. Los documentos 
-              generados por el usuario para su uso personal o profesional pertenecen al usuario.
-            </p>
-
-            <h3>5. Limitación de Responsabilidad</h3>
-            <p>
-              CareerFlow AI no garantiza el éxito en procesos de contratación. El servicio se proporciona "tal cual" 
-              y no nos hacemos responsables de decisiones tomadas basadas en el contenido generado por la IA.
-            </p>
-          </CardContent>
-        </Card>
-      </motion.div>
+          <section>
+             <h2 className="text-2xl font-bold text-brand-dark mb-4">4. Limitación de Responsabilidad</h2>
+             <p>
+                Career Flow no se hace responsable de daños indirectos derivados del uso o la imposibilidad de uso del servicio.
+             </p>
+          </section>
+        </div>
+      </main>
+      <Footer />
     </div>
   );
-}
+};
+
+export default Terms;

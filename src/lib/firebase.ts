@@ -1,22 +1,41 @@
 import { initializeApp } from 'firebase/app';
-import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
+import { 
+  getAuth, 
+  GoogleAuthProvider, 
+  OAuthProvider,
+  signInWithPopup, 
+  signOut, 
+  onAuthStateChanged,
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  sendEmailVerification,
+  sendPasswordResetEmail,
+  updateProfile,
+  setPersistence,
+  browserLocalPersistence,
+  User as FirebaseUser
+} from 'firebase/auth';
 import { 
   getFirestore, 
-  collection, 
   doc, 
   setDoc, 
   getDoc, 
-  getDocs, 
-  addDoc, 
   updateDoc, 
-  deleteDoc, 
+  collection, 
   query, 
   where, 
   orderBy, 
+  limit, 
   onSnapshot,
   serverTimestamp,
+  increment,
+  arrayUnion,
+  deleteDoc,
+  addDoc,
+  getDocs,
   getDocFromServer
 } from 'firebase/firestore';
+import { getStorage, ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import firebaseConfigData from '../../firebase-applet-config.json';
 
 const firebaseConfig = {
@@ -26,18 +45,38 @@ const firebaseConfig = {
   storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || firebaseConfigData.storageBucket,
   messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || firebaseConfigData.messagingSenderId,
   appId: import.meta.env.VITE_FIREBASE_APP_ID || firebaseConfigData.appId,
-  // measurementId is optional and only used for analytics. It can be safely omitted.
-  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || (firebaseConfigData as any).measurementId || undefined,
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || firebaseConfigData.measurementId,
   firestoreDatabaseId: import.meta.env.VITE_FIREBASE_DATABASE_ID || firebaseConfigData.firestoreDatabaseId,
 };
 
-// Initialize Firebase
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
-export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
-export const googleProvider = new GoogleAuthProvider();
 
-// Error handling for Firestore
+// Use local persistence to ensure session is kept in iframes/tabs
+setPersistence(auth, browserLocalPersistence).catch(err => {
+  console.error("Auth persistence error:", err);
+});
+
+export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+export const storage = getStorage(app);
+
+// Connectivity Test
+async function testConnection() {
+  try {
+    await getDocFromServer(doc(db, 'system_health', 'connection_test'));
+    console.log("Firestore connection verified");
+  } catch (error) {
+    if (error instanceof Error && error.message.includes('offline')) {
+      console.error("Firebase is offline. Check configuration.");
+    }
+  }
+}
+testConnection();
+
+export const googleProvider = new GoogleAuthProvider();
+export const microsoftProvider = new OAuthProvider('microsoft.com');
+
+// Helper to handle Firestore Errors as requested
 export enum OperationType {
   CREATE = 'create',
   UPDATE = 'update',
@@ -47,40 +86,13 @@ export enum OperationType {
   WRITE = 'write',
 }
 
-export interface FirestoreErrorInfo {
-  error: string;
-  operationType: OperationType;
-  path: string | null;
-  authInfo: {
-    userId: string | undefined;
-    email: string | null | undefined;
-    emailVerified: boolean | undefined;
-    isAnonymous: boolean | undefined;
-    tenantId: string | null | undefined;
-    providerInfo: {
-      providerId: string;
-      displayName: string | null;
-      email: string | null;
-      photoUrl: string | null;
-    }[];
-  }
-}
-
 export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
-  const errInfo: FirestoreErrorInfo = {
+  const errInfo = {
     error: error instanceof Error ? error.message : String(error),
     authInfo: {
       userId: auth.currentUser?.uid,
       email: auth.currentUser?.email,
       emailVerified: auth.currentUser?.emailVerified,
-      isAnonymous: auth.currentUser?.isAnonymous,
-      tenantId: auth.currentUser?.tenantId,
-      providerInfo: auth.currentUser?.providerData.map(provider => ({
-        providerId: provider.providerId,
-        displayName: provider.displayName,
-        email: provider.email,
-        photoUrl: provider.photoURL
-      })) || []
     },
     operationType,
     path
@@ -89,34 +101,33 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
   throw new Error(JSON.stringify(errInfo));
 }
 
-// Connection test
-async function testConnection() {
-  try {
-    await getDocFromServer(doc(db, 'test', 'connection'));
-  } catch (error) {
-    if(error instanceof Error && error.message.includes('the client is offline')) {
-      console.error("Please check your Firebase configuration. The client is offline.");
-    }
-  }
-}
-testConnection();
-
-export { 
-  signInWithPopup, 
-  signOut, 
+export {
+  signInWithPopup,
+  signOut,
   onAuthStateChanged,
-  collection, 
-  doc, 
-  setDoc, 
-  getDoc, 
-  getDocs, 
-  addDoc, 
-  updateDoc, 
-  deleteDoc, 
-  query, 
-  where, 
-  orderBy, 
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  sendEmailVerification,
+  sendPasswordResetEmail,
+  updateProfile,
+  doc,
+  setDoc,
+  getDoc,
+  updateDoc,
+  collection,
+  query,
+  where,
+  orderBy,
+  limit,
   onSnapshot,
-  serverTimestamp
+  serverTimestamp,
+  increment,
+  arrayUnion,
+  deleteDoc,
+  addDoc,
+  getDocs,
+  ref,
+  uploadBytesResumable,
+  getDownloadURL
 };
 export type { FirebaseUser };
